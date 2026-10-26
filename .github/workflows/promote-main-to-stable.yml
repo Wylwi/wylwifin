@@ -13,7 +13,12 @@ name: Promote main to stable
 # org-maintained, and shared with the other image repos (see issues #235/#237).
 
 on:
-  push:
+  # Run after the build, not on the push itself: the release gate resolves the
+  # :testing digest, which does not exist until Build and Push Image has
+  # published it. A push-triggered run raced the build and failed the gate.
+  workflow_run:
+    workflows: ["Build and Push Image"]
+    types: [completed]
     branches:
       - main
   schedule:
@@ -39,6 +44,7 @@ concurrency:
 jobs:
   promote:
     name: Promote main to stable
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     uses: projectbluefin/actions/.github/workflows/reusable-promote-squash.yml@209517dda44829f126e25da28f11245c34458ac3 # v1
     with:
       variants: >-
