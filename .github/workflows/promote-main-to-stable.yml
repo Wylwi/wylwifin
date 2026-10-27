@@ -13,7 +13,12 @@ name: Promote main to stable
 # org-maintained, and shared with the other image repos (see issues #235/#237).
 
 on:
-  push:
+  # Run after the build, not on the push itself: the release gate resolves the
+  # :testing digest, which does not exist until Build and Push Image has
+  # published it. A push-triggered run raced the build and failed the gate.
+  workflow_run:
+    workflows: ["Build and Push Image"]
+    types: [completed]
     branches:
       - main
   schedule:
@@ -39,6 +44,7 @@ concurrency:
 jobs:
   promote:
     name: Promote main to stable
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     uses: projectbluefin/actions/.github/workflows/reusable-promote-squash.yml@209517dda44829f126e25da28f11245c34458ac3 # v1
     with:
       variants: >-
@@ -54,8 +60,9 @@ jobs:
       # the PR was built from.
       run_e2e: false
       # The only path that auto-enrolls the PR is a merge queue, which needs an
-      # organization-owned repository. Personal-account forks cannot use one.
-      use_merge_queue: false
+      # organization-owned repository. This repository lives in the Wylwifin
+      # organization and `stable` has a merge queue (see the onboarding skill).
+      use_merge_queue: true
       # The reusable renders the promotion PR body from `auto_merge`, not
       # `use_merge_queue`: `auto_merge` states how the PR is merged at all.
       # It defaults to true, so without this the body advertises an auto-merge
@@ -63,21 +70,11 @@ jobs:
       # here — finpilot is a personal fork merged by hand. Operators waiting for
       # that auto-merge never see one, so set it false to match the manual merge
       # below. Enrollment stays governed separately by enqueue_promotion.
-      auto_merge: false
-      # Enrolling without a merge queue runs `gh pr merge --auto` with no merge
-      # method, and GitHub CLI refuses that without a TTY ("--merge, --rebase,
-      # or --squash required when not running interactively"). The reusable
-      # exposes no merge-method input, so enrollment stays off and the promotion
-      # PR is merged by hand.
-      #
-      # Merging by hand matters beyond the merge method. A merge performed as
-      # github-actions creates no workflow runs — a push made with that token is
-      # exempt only for workflow_dispatch and repository_dispatch — so the
-      # push-triggered execute-release.yml and sync-stable-to-main.yml never
-      # fire for it and the release becomes a manual dispatch. A merge performed
-      # by a person fires both, which is why this PR is merged in the UI rather
-      # than by a bot.
-      enqueue_promotion: false
+      auto_merge: true
+      # Enroll the promotion PR in the merge queue once its checks pass. The queue
+      # performs the merge, so the push-triggered execute-release.yml and
+      # sync-stable-to-main.yml fire for it.
+      enqueue_promotion: true
       # Personal-account forks do not have an <owner>/maintainers team.
       # Organization forks can enable this and optionally set `reviewer`.
       request_reviewer: false

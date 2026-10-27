@@ -73,7 +73,10 @@ rm -rf "${CLEAN_ROOT}/.gitkeep"
 # directories are empty (e.g. /var/cache/{libdnf5,rpm-ostree} only exist as
 # transient buildah cache mounts and are not present in this layer).
 find "${CLEAN_ROOT}/var" -mindepth 1 -maxdepth 1 -type d \! -name cache -exec rm -fr {} \;
-find "${CLEAN_ROOT}/var/cache" -mindepth 1 -maxdepth 1 -type d \! -name libdnf5 \! -name rpm-ostree -exec rm -fr {} \;
+# Some bases (Bluefin) ship no /var/cache at all, and the find above skips it.
+if [[ -d "${CLEAN_ROOT}/var/cache" ]]; then
+	find "${CLEAN_ROOT}/var/cache" -mindepth 1 -maxdepth 1 -type d \! -name libdnf5 \! -name rpm-ostree -exec rm -fr {} \;
+fi
 
 # Clear tmpfs-backed runtime directories without deleting the directories
 # themselves. Buildah may have bind mounts in these paths during RUN, so
